@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+:root {
+  --background: #07111f;
+  --foreground: #eff7ff;
+  --muted: #8aa3bf;
+  --card: rgba(7, 17, 31, 0.68);
+  --card-strong: rgba(11, 26, 46, 0.88);
+  --line: rgba(164, 197, 255, 0.14);
+  --accent: #67e8f9;
+  --accent-strong: #22d3ee;
+  --accent-warm: #f59e0b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-space-grotesk), sans-serif;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.18), transparent 28%),
+    radial-gradient(circle at 85% 18%, rgba(245, 158, 11, 0.18), transparent 24%),
+    radial-gradient(circle at 50% 110%, rgba(59, 130, 246, 0.22), transparent 35%),
+    linear-gradient(180deg, #07111f 0%, #050b15 48%, #03070d 100%);
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black 48%, transparent 88%);
+}
+
+::selection {
+  background: rgba(103, 232, 249, 0.92);
+  color: #041019;
+}
+
+@media (pointer: fine) {
+  body,
+  a,
+  button,
+  input,
+  label,
+  select,
+  textarea {
+    cursor: none;
+  }
+}
+
+.glass-panel {
+  background: linear-gradient(
+    180deg,
+    rgba(13, 29, 49, 0.8) 0%,
+    rgba(6, 16, 29, 0.7) 100%
+  );
+  border: 1px solid var(--line);
+  box-shadow:
+    0 22px 50px rgba(3, 8, 19, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+}
+
+.gradient-stroke {
+  position: relative;
+}
+
+.gradient-stroke::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(103, 232, 249, 0.72),
+    rgba(255, 255, 255, 0.08),
+    rgba(245, 158, 11, 0.55)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.text-glow {
+  text-shadow: 0 0 24px rgba(103, 232, 249, 0.2);
+}
+
+.soft-hover {
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background-color 220ms ease;
+}
+
+.soft-hover:hover {
+  transform: translateY(-4px);
+  border-color: rgba(103, 232, 249, 0.45);
+  box-shadow:
+    0 24px 54px rgba(2, 8, 19, 0.58),
+    0 0 0 1px rgba(103, 232, 249, 0.2);
+}
+
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(
+    120deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 62%
+  );
+  transform: translateX(-100%) rotate(8deg);
+  transition: transform 520ms ease;
+}
+
+.shine:hover::after {
+  transform: translateX(100%) rotate(8deg);
+}
+
+.ring-button {
+  background:
+    linear-gradient(180deg, rgba(103, 232, 249, 0.18), rgba(34, 211, 238, 0.06)),
+    rgba(6, 16, 29, 0.8);
+}
+
+.mesh-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(18px);
+  opacity: 0.52;
+  pointer-events: none;
+}
+
+.range-input {
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(103, 232, 249, 0.85),
+    rgba(34, 211, 238, 0.28)
+  );
+}
+
+.range-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  background: #03111f;
+  box-shadow: 0 0 0 5px rgba(103, 232, 249, 0.14);
+}
+
+.range-input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  background: #03111f;
+  box-shadow: 0 0 0 5px rgba(103, 232, 249, 0.14);
+}
+
+.dashed-zone {
+  border: 1px dashed rgba(154, 188, 255, 0.34);
+  background:
+    radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 54%),
+    rgba(4, 11, 21, 0.82);
+}
