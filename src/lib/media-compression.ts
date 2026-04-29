@@ -10,6 +10,17 @@ import sharp from "sharp";
 type ImageFormat = "preserve" | "webp" | "jpeg" | "png" | "avif";
 type VideoQuality = "light" | "balanced" | "strong";
 type AudioQuality = "high" | "balanced" | "compact";
+export type AudioEffectId =
+  | "helium"
+  | "deep"
+  | "robot"
+  | "radio"
+  | "cave"
+  | "vapor"
+  | "glitch"
+  | "telephone"
+  | "underwater"
+  | "wide";
 
 type CompressionResult = {
   buffer: Buffer;
@@ -31,6 +42,11 @@ type VideoProfile = {
 type AudioProfile = {
   bitrate: string;
   sampleRate: number;
+};
+
+type AudioEffectProfile = {
+  filter: string;
+  label: string;
 };
 
 const videoProfiles: Record<VideoQuality, VideoProfile> = {
@@ -63,12 +79,76 @@ const audioProfiles: Record<AudioQuality, AudioProfile> = {
   compact: { bitrate: "96k", sampleRate: 44100 },
 };
 
+const audioEffectProfiles: Record<AudioEffectId, AudioEffectProfile> = {
+  helium: {
+    label: "Helium",
+    filter: "asetrate=44100*1.38,aresample=44100,atempo=0.92",
+  },
+  deep: {
+    label: "Basse profonde",
+    filter: "asetrate=44100*0.72,aresample=44100,atempo=1.08,bass=g=8",
+  },
+  robot: {
+    label: "Robot",
+    filter: "acrusher=bits=7:mix=0.45,tremolo=f=22:d=0.55",
+  },
+  radio: {
+    label: "Radio cassee",
+    filter:
+      "highpass=f=650,lowpass=f=3200,acompressor=threshold=-18dB:ratio=8:attack=5:release=80,volume=1.35",
+  },
+  cave: {
+    label: "Cave echo",
+    filter: "aecho=0.82:0.88:900|1350:0.35|0.22",
+  },
+  vapor: {
+    label: "Vapor lent",
+    filter: "asetrate=44100*0.84,aresample=44100,atempo=1.06,aecho=0.75:0.65:520:0.24",
+  },
+  glitch: {
+    label: "Glitch tremolo",
+    filter: "tremolo=f=18:d=0.78,acrusher=bits=8:mix=0.32",
+  },
+  telephone: {
+    label: "Telephone",
+    filter: "highpass=f=900,lowpass=f=3000,volume=1.45",
+  },
+  underwater: {
+    label: "Sous l'eau",
+    filter: "lowpass=f=820,aecho=0.7:0.55:85:0.24",
+  },
+  wide: {
+    label: "Stereo large",
+    filter: "aecho=0.8:0.62:360|720:0.18|0.12,treble=g=4",
+  },
+};
+
+export const audioEffectIds = Object.keys(
+  audioEffectProfiles,
+) as AudioEffectId[];
+
 if (typeof ffmpegStatic === "string") {
   ffmpeg.setFfmpegPath(ffmpegStatic);
 }
 
 if (ffprobeStatic.path) {
   ffmpeg.setFfprobePath(ffprobeStatic.path);
+}
+
+export async function applyAudioEffect(file: File, formData: FormData) {
+  const sourceBuffer = Buffer.from(await file.arrayBuffer());
+  const effect = parseAudioEffect(formData.get("effect"));
+
+  if (!isAudioFile(file)) {
+    throw new Error("Depose un fichier audio ou MP3 pour appliquer un mod.");
+  }
+
+  return transformAudioEffect({
+    buffer: sourceBuffer,
+    effect,
+    fileName: file.name,
+    originalSize: sourceBuffer.byteLength,
+  });
 }
 
 export async function compressMedia(file: File, formData: FormData) {
@@ -114,6 +194,58 @@ export async function compressMedia(file: File, formData: FormData) {
   }
 
   throw new Error("Ce type de fichier n'est pas encore pris en charge.");
+}
+
+async function transformAudioEffect({
+  buffer,
+  effect,
+  fileName,
+  originalSize,
+}: {
+  buffer: Buffer;
+  effect: AudioEffectId;
+  fileName: string;
+  originalSize: number;
+}): Promise<CompressionResult & { effectLabel: string }> {
+  const tempDirectory = await fs.mkdtemp(
+    path.join(os.tmpdir(), "pulse-audio-mod-"),
+  );
+  const inputExtension = path.extname(fileName) || ".mp3";
+  const inputPath = path.join(tempDirectory, `${randomUUID()}${inputExtension}`);
+  const profile = audioEffectProfiles[effect];
+  const outputName = `${stripExtension(fileName)}-${effect}.mp3`;
+  const outputPath = path.join(tempDirectory, outputName);
+
+  try {
+    await fs.writeFile(inputPath, buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath)
+        .noVideo()
+        .audioFilters(profile.filter)
+        .audioCodec("libmp3lame")
+        .audioBitrate("160k")
+        .audioFrequency(44100)
+        .format("mp3")
+        .on("end", () => resolve())
+        .on("error", (error) => reject(error))
+        .save(outputPath);
+    });
+
+    const outputBuffer = await fs.readFile(outputPath);
+
+    return {
+      buffer: outputBuffer,
+      compressedSize: outputBuffer.byteLength,
+      effectLabel: profile.label,
+      fileName: outputName,
+      mimeType: "audio/mpeg",
+      originalSize,
+      savedPercent: calculateSavedPercent(originalSize, outputBuffer.byteLength),
+    };
+  } finally {
+    await fs.rm(tempDirectory, { force: true, recursive: true });
+  }
 }
 
 async function compressImage({
@@ -350,6 +482,12 @@ function parseAudioQuality(value: FormDataEntryValue | null): AudioQuality {
   return value === "high" || value === "compact" || value === "balanced"
     ? value
     : "balanced";
+}
+
+function parseAudioEffect(value: FormDataEntryValue | null): AudioEffectId {
+  return audioEffectIds.includes(value as AudioEffectId)
+    ? (value as AudioEffectId)
+    : audioEffectIds[Math.floor(Math.random() * audioEffectIds.length)];
 }
 
 function parseVideoHeight(value: FormDataEntryValue | null) {

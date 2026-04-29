@@ -8,6 +8,7 @@ import {
   ImageIcon,
   Music,
   ShieldCheck,
+  Shuffle,
   SlidersHorizontal,
   Sparkles,
   UploadCloud,
@@ -28,12 +29,31 @@ type ImageFormat = "preserve" | "webp" | "jpeg" | "png" | "avif";
 type VideoQuality = "light" | "balanced" | "strong";
 type VideoHeight = "source" | "1080" | "720" | "480";
 type AudioQuality = "high" | "balanced" | "compact";
+type AudioEffectId =
+  | "helium"
+  | "deep"
+  | "robot"
+  | "radio"
+  | "cave"
+  | "vapor"
+  | "glitch"
+  | "telephone"
+  | "underwater"
+  | "wide";
+type AudioEffectChoice = AudioEffectId | "random";
 
 type CompressionResult = {
   compressedSize: number;
   downloadName: string;
   originalSize: number;
   savedPercent: number;
+  url: string;
+};
+
+type AudioModResult = {
+  downloadName: string;
+  effectName: string;
+  size: number;
   url: string;
 };
 
@@ -64,6 +84,19 @@ const audioProfiles: { label: string; value: AudioQuality; note: string }[] = [
   { label: "Compact", value: "compact", note: "96 kb/s" },
 ];
 
+const audioEffects: { label: string; value: AudioEffectId; note: string }[] = [
+  { label: "Helium", value: "helium", note: "voix aigue" },
+  { label: "Basse", value: "deep", note: "voix grave" },
+  { label: "Robot", value: "robot", note: "hachure metal" },
+  { label: "Radio", value: "radio", note: "signal sale" },
+  { label: "Cave", value: "cave", note: "echo long" },
+  { label: "Vapor", value: "vapor", note: "ralenti flou" },
+  { label: "Glitch", value: "glitch", note: "tremolo casse" },
+  { label: "Telephone", value: "telephone", note: "bande etroite" },
+  { label: "Sous l'eau", value: "underwater", note: "son noye" },
+  { label: "Stereo", value: "wide", note: "espace large" },
+];
+
 const highlights = [
   {
     icon: Zap,
@@ -86,6 +119,18 @@ export function CompressStudio() {
   const [dragActive, setDragActive] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [audioModDragActive, setAudioModDragActive] = useState(false);
+  const [audioModError, setAudioModError] = useState<string | null>(null);
+  const [audioModFile, setAudioModFile] = useState<File | null>(null);
+  const [audioModPreviewUrl, setAudioModPreviewUrl] = useState<string | null>(
+    null,
+  );
+  const [audioModResult, setAudioModResult] = useState<AudioModResult | null>(
+    null,
+  );
+  const [audioModChoice, setAudioModChoice] =
+    useState<AudioEffectChoice>("random");
+  const [isApplyingAudioMod, setIsApplyingAudioMod] = useState(false);
   const [audioQuality, setAudioQuality] = useState<AudioQuality>("balanced");
   const [imageFormat, setImageFormat] = useState<ImageFormat>("webp");
   const [imageQuality, setImageQuality] = useState(72);
@@ -94,6 +139,7 @@ export function CompressStudio() {
   const [result, setResult] = useState<CompressionResult | null>(null);
   const [videoHeight, setVideoHeight] = useState<VideoHeight>("720");
   const [videoQuality, setVideoQuality] = useState<VideoQuality>("light");
+  const audioModInputRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const kind = useMemo<MediaKind>(() => inferKind(file), [file]);
@@ -119,6 +165,28 @@ export function CompressStudio() {
       }
     };
   }, [result]);
+
+  useEffect(() => {
+    if (!audioModFile) {
+      setAudioModPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(audioModFile);
+    setAudioModPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [audioModFile]);
+
+  useEffect(() => {
+    return () => {
+      if (audioModResult?.url) {
+        URL.revokeObjectURL(audioModResult.url);
+      }
+    };
+  }, [audioModResult]);
 
   const savedBytes =
     result !== null ? result.originalSize - result.compressedSize : 0;
@@ -150,6 +218,88 @@ export function CompressStudio() {
 
   function handleDragState(active: boolean) {
     setDragActive(active);
+  }
+
+  function openAudioModPicker() {
+    audioModInputRef.current?.click();
+  }
+
+  async function onAudioModFileChosen(nextFile: File | null) {
+    if (!nextFile) {
+      return;
+    }
+
+    setAudioModFile(nextFile);
+    await applyAudioMod(nextFile, audioModChoice);
+  }
+
+  async function applyAudioMod(
+    targetFile = audioModFile,
+    effectChoice = audioModChoice,
+  ) {
+    if (!targetFile) {
+      setAudioModError("Depose un fichier audio avant de lancer un mod.");
+      return;
+    }
+
+    if (
+      !targetFile.type.startsWith("audio/") &&
+      !targetFile.name.toLowerCase().endsWith(".mp3")
+    ) {
+      setAudioModError("Cette case accepte uniquement des fichiers audio.");
+      return;
+    }
+
+    if (audioModResult?.url) {
+      URL.revokeObjectURL(audioModResult.url);
+    }
+
+    setAudioModError(null);
+    setAudioModResult(null);
+    setIsApplyingAudioMod(true);
+
+    const formData = new FormData();
+    formData.set("file", targetFile);
+
+    if (effectChoice !== "random") {
+      formData.set("effect", effectChoice);
+    }
+
+    try {
+      const response = await fetch("/api/audio-mods", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+
+        throw new Error(payload?.error ?? "Le mod audio a echoue.");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const effectName = response.headers.get("X-Audio-Effect") ?? "Mod audio";
+
+      startTransition(() => {
+        setAudioModResult({
+          downloadName: makeDownloadName(targetFile.name, blob.type),
+          effectName,
+          size: blob.size,
+          url: objectUrl,
+        });
+      });
+    } catch (error) {
+      setAudioModError(
+        error instanceof Error
+          ? error.message
+          : "Une erreur inattendue est survenue.",
+      );
+    } finally {
+      setIsApplyingAudioMod(false);
+    }
   }
 
   async function handleCompress() {
@@ -633,6 +783,198 @@ export function CompressStudio() {
                   economise et un telechargement direct.
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+
+        <section className="glass-panel gradient-stroke rounded-[2rem] p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.22em] text-amber-200/70">
+                Audio mods
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">
+                Boite a effets aleatoires
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => applyAudioMod()}
+              data-cursor="Again"
+              disabled={!audioModFile || isApplyingAudioMod}
+              className="ring-button shine soft-hover inline-flex items-center gap-2 rounded-full border border-cyan-200/15 px-4 py-2.5 text-sm font-medium text-cyan-50 disabled:opacity-45"
+            >
+              <Shuffle className="h-4 w-4" />
+              Relancer
+            </button>
+          </div>
+
+          <input
+            ref={audioModInputRef}
+            type="file"
+            className="hidden"
+            accept="audio/*,.mp3"
+            onChange={(event) =>
+              onAudioModFileChosen(event.target.files?.item(0) ?? null)
+            }
+          />
+
+          <div className="mt-5 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+            <div
+              role="button"
+              tabIndex={0}
+              data-cursor="Mod"
+              onClick={openAudioModPicker}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openAudioModPicker();
+                }
+              }}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setAudioModDragActive(true);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setAudioModDragActive(true);
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                setAudioModDragActive(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setAudioModDragActive(false);
+                void onAudioModFileChosen(
+                  event.dataTransfer.files?.item(0) ?? null,
+                );
+              }}
+              className={`dashed-zone flex min-h-[18rem] flex-col items-center justify-center rounded-[1.75rem] px-5 py-8 text-center outline-none transition duration-300 ${
+                audioModDragActive
+                  ? "scale-[1.01] border-amber-300/70 shadow-[0_0_0_1px_rgba(245,158,11,0.18)]"
+                  : "border-white/15"
+              }`}
+            >
+              <div className="rounded-[1.7rem] border border-white/10 bg-white/6 p-4 text-amber-100">
+                <WandSparkles className="h-8 w-8" />
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-white">
+                {audioModFile
+                  ? `Mod en attente: ${audioModFile.name}`
+                  : "Drop un MP3 ici"}
+              </h3>
+              <p className="mt-2 max-w-md text-sm leading-7 text-slate-300">
+                Choisis un effet ou laisse le hasard faire, puis deposite ton
+                audio pour sortir une version transformee.
+              </p>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <button
+                  type="button"
+                  data-cursor="Random"
+                  onClick={() => setAudioModChoice("random")}
+                  className={`soft-hover rounded-[1.25rem] border px-4 py-4 text-left ${
+                    audioModChoice === "random"
+                      ? "border-amber-300/70 bg-amber-300/14 text-white"
+                      : "border-white/10 bg-white/4 text-slate-300"
+                  }`}
+                >
+                  <p className="font-medium">Random</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
+                    surprise
+                  </p>
+                </button>
+
+                {audioEffects.map((effect) => (
+                  <button
+                    key={effect.value}
+                    type="button"
+                    data-cursor={effect.label}
+                    onClick={() => setAudioModChoice(effect.value)}
+                    className={`soft-hover rounded-[1.25rem] border px-4 py-4 text-left ${
+                      audioModChoice === effect.value
+                        ? "border-cyan-300/70 bg-cyan-300/15 text-white"
+                        : "border-white/10 bg-white/4 text-slate-300"
+                    }`}
+                  >
+                    <p className="font-medium">{effect.label}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
+                      {effect.note}
+                    </p>
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="min-h-24 rounded-[1.25rem] border border-white/10 bg-slate-950/35 p-4">
+                    <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+                      Original
+                    </p>
+                    {audioModPreviewUrl ? (
+                      <audio
+                        key={audioModPreviewUrl}
+                        controls
+                        className="w-full"
+                        src={audioModPreviewUrl}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-400">
+                        Aucun audio depose.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="min-h-24 rounded-[1.25rem] border border-white/10 bg-slate-950/35 p-4">
+                    <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+                      Resultat
+                    </p>
+                    {audioModResult ? (
+                      <audio
+                        key={audioModResult.url}
+                        controls
+                        className="w-full"
+                        src={audioModResult.url}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-400">
+                        {isApplyingAudioMod
+                          ? "Transformation en cours..."
+                          : "Le mod apparaitra ici."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {audioModResult ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-slate-300">
+                      <span className="text-white">{audioModResult.effectName}</span>
+                      {" · "}
+                      {formatBytes(audioModResult.size)}
+                    </div>
+                    <a
+                      href={audioModResult.url}
+                      download={audioModResult.downloadName}
+                      data-cursor="Save"
+                      className="shine soft-hover inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2.5 text-sm font-medium text-white"
+                    >
+                      <ArrowDownToLine className="h-4 w-4" />
+                      Telecharger
+                    </a>
+                  </div>
+                ) : null}
+
+                {audioModError ? (
+                  <p className="mt-4 rounded-2xl border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+                    {audioModError}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>

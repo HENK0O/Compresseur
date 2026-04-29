@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createContentDisposition } from "@/lib/download-response";
-import { compressMedia } from "@/lib/media-compression";
+import { applyAudioEffect } from "@/lib/media-compression";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,21 +12,21 @@ export async function POST(request: NextRequest) {
 
     if (!(entry instanceof File)) {
       return Response.json(
-        { error: "Aucun fichier valide n'a ete envoye." },
+        { error: "Aucun fichier audio valide n'a ete envoye." },
         { status: 400 },
       );
     }
 
-    const result = await compressMedia(entry, formData);
+    const result = await applyAudioEffect(entry, formData);
 
     return new Response(new Uint8Array(result.buffer), {
       status: 200,
       headers: {
         "Content-Type": result.mimeType,
         "Content-Disposition": createContentDisposition(result.fileName),
+        "X-Audio-Effect": result.effectLabel,
         "X-Original-Size": String(result.originalSize),
         "X-Compressed-Size": String(result.compressedSize),
-        "X-Saved-Percent": result.savedPercent.toFixed(2),
       },
     });
   } catch (error) {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : "La compression a echoue.",
+            : "Le mod audio a echoue.",
       },
       { status: 500 },
     );

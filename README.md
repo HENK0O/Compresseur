@@ -7,6 +7,7 @@ PulseCompress est une application Next.js qui permet de compresser localement de
 - Compression d'images avec `sharp`
 - Compression de videos avec `ffmpeg`
 - Compression de MP3 avec `ffmpeg`
+- Mods audio aleatoires avec effets de voix, radio, echo, glitch et filtres experimentaux
 - Interface moderne avec apercu, drag-and-drop et telechargement direct
 - Aucun service externe ni cle API necessaire
 
