@@ -26,6 +26,8 @@ export function inferKind(file: File | null) {
     return "unknown" as const;
   }
 
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
   if (file.type.startsWith("image/")) {
     return "image" as const;
   }
@@ -34,12 +36,19 @@ export function inferKind(file: File | null) {
     return "video" as const;
   }
 
+  if (file.type.startsWith("audio/") || extension === "mp3") {
+    return "audio" as const;
+  }
+
   return "unknown" as const;
 }
 
 export function makeDownloadName(originalName: string, mimeType: string) {
   const baseName = originalName.replace(/\.[^/.]+$/, "");
-  const extension = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "bin";
+  const extension =
+    mimeType === "audio/mpeg"
+      ? "mp3"
+      : (mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "bin");
 
   return `${baseName}-compressed.${extension}`;
 }

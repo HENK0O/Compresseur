@@ -9,6 +9,7 @@ import sharp from "sharp";
 
 type ImageFormat = "preserve" | "webp" | "jpeg" | "png" | "avif";
 type VideoQuality = "light" | "balanced" | "strong";
+type AudioQuality = "high" | "balanced" | "compact";
 
 type CompressionResult = {
   buffer: Buffer;
@@ -25,6 +26,11 @@ type VideoProfile = {
   maxRate: string;
   bufferSize: string;
   preset: string;
+};
+
+type AudioProfile = {
+  bitrate: string;
+  sampleRate: number;
 };
 
 const videoProfiles: Record<VideoQuality, VideoProfile> = {
@@ -49,6 +55,12 @@ const videoProfiles: Record<VideoQuality, VideoProfile> = {
     bufferSize: "10M",
     preset: "medium",
   },
+};
+
+const audioProfiles: Record<AudioQuality, AudioProfile> = {
+  high: { bitrate: "192k", sampleRate: 44100 },
+  balanced: { bitrate: "128k", sampleRate: 44100 },
+  compact: { bitrate: "96k", sampleRate: 44100 },
 };
 
 if (typeof ffmpegStatic === "string") {
@@ -87,6 +99,17 @@ export async function compressMedia(file: File, formData: FormData) {
       originalSize,
       quality,
       targetHeight: height,
+    });
+  }
+
+  if (isAudioFile(file)) {
+    const quality = parseAudioQuality(formData.get("audioQuality"));
+
+    return compressAudio({
+      buffer: sourceBuffer,
+      fileName: file.name,
+      originalSize,
+      quality,
     });
   }
 
@@ -207,6 +230,56 @@ async function compressVideo({
   }
 }
 
+async function compressAudio({
+  buffer,
+  fileName,
+  originalSize,
+  quality,
+}: {
+  buffer: Buffer;
+  fileName: string;
+  originalSize: number;
+  quality: AudioQuality;
+}): Promise<CompressionResult> {
+  const tempDirectory = await fs.mkdtemp(
+    path.join(os.tmpdir(), "pulse-compress-"),
+  );
+  const inputExtension = path.extname(fileName) || ".mp3";
+  const inputPath = path.join(tempDirectory, `${randomUUID()}${inputExtension}`);
+  const outputName = `${stripExtension(fileName)}-compressed.mp3`;
+  const outputPath = path.join(tempDirectory, outputName);
+  const profile = audioProfiles[quality];
+
+  try {
+    await fs.writeFile(inputPath, buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath)
+        .noVideo()
+        .audioCodec("libmp3lame")
+        .audioBitrate(profile.bitrate)
+        .audioFrequency(profile.sampleRate)
+        .format("mp3")
+        .on("end", () => resolve())
+        .on("error", (error) => reject(error))
+        .save(outputPath);
+    });
+
+    const outputBuffer = await fs.readFile(outputPath);
+
+    return {
+      buffer: outputBuffer,
+      compressedSize: outputBuffer.byteLength,
+      fileName: outputName,
+      mimeType: "audio/mpeg",
+      originalSize,
+      savedPercent: calculateSavedPercent(originalSize, outputBuffer.byteLength),
+    };
+  } finally {
+    await fs.rm(tempDirectory, { force: true, recursive: true });
+  }
+}
+
 async function probeVideoHeight(filePath: string) {
   return new Promise<number | null>((resolve) => {
     ffmpeg.ffprobe(filePath, (error, metadata) => {
@@ -273,6 +346,12 @@ function parseVideoQuality(value: FormDataEntryValue | null): VideoQuality {
     : "balanced";
 }
 
+function parseAudioQuality(value: FormDataEntryValue | null): AudioQuality {
+  return value === "high" || value === "compact" || value === "balanced"
+    ? value
+    : "balanced";
+}
+
 function parseVideoHeight(value: FormDataEntryValue | null) {
   if (value === "1080" || value === "720" || value === "480") {
     return Number(value);
@@ -283,4 +362,8 @@ function parseVideoHeight(value: FormDataEntryValue | null) {
 
 function stripExtension(fileName: string) {
   return fileName.replace(/\.[^/.]+$/, "");
+}
+
+function isAudioFile(file: File) {
+  return file.type.startsWith("audio/") || file.name.toLowerCase().endsWith(".mp3");
 }

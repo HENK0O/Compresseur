@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   ImageIcon,
+  Music,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -22,10 +23,11 @@ import {
   makeDownloadName,
 } from "@/lib/format";
 
-type MediaKind = "image" | "video" | "unknown";
+type MediaKind = "image" | "video" | "audio" | "unknown";
 type ImageFormat = "preserve" | "webp" | "jpeg" | "png" | "avif";
 type VideoQuality = "light" | "balanced" | "strong";
 type VideoHeight = "source" | "1080" | "720" | "480";
+type AudioQuality = "high" | "balanced" | "compact";
 
 type CompressionResult = {
   compressedSize: number;
@@ -56,6 +58,12 @@ const videoHeights: { label: string; value: VideoHeight }[] = [
   { label: "480p", value: "480" },
 ];
 
+const audioProfiles: { label: string; value: AudioQuality; note: string }[] = [
+  { label: "High", value: "high", note: "192 kb/s" },
+  { label: "Balanced", value: "balanced", note: "128 kb/s" },
+  { label: "Compact", value: "compact", note: "96 kb/s" },
+];
+
 const highlights = [
   {
     icon: Zap,
@@ -78,6 +86,7 @@ export function CompressStudio() {
   const [dragActive, setDragActive] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [audioQuality, setAudioQuality] = useState<AudioQuality>("balanced");
   const [imageFormat, setImageFormat] = useState<ImageFormat>("webp");
   const [imageQuality, setImageQuality] = useState(72);
   const [isCompressing, setIsCompressing] = useState(false);
@@ -158,6 +167,7 @@ export function CompressStudio() {
     formData.set("imageFormat", imageFormat);
     formData.set("videoQuality", videoQuality);
     formData.set("videoHeight", videoHeight);
+    formData.set("audioQuality", audioQuality);
 
     try {
       const response = await fetch("/api/compress", {
@@ -228,7 +238,7 @@ export function CompressStudio() {
 
               <div className="space-y-4">
                 <h1 className="max-w-3xl text-5xl font-semibold leading-[0.95] text-glow sm:text-6xl lg:text-7xl">
-                  Ton propre compresseur d&apos;images et de videos, sans
+                  Ton propre compresseur d&apos;images, videos et MP3, sans
                   abonnements inutiles.
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
@@ -239,7 +249,7 @@ export function CompressStudio() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <StatCard label="Formats" value="Images + videos" />
+                <StatCard label="Formats" value="Images + videos + MP3" />
                 <StatCard label="Traitement" value="Local-first" />
                 <StatCard label="Style" value="Cursor premium" />
               </div>
@@ -295,7 +305,7 @@ export function CompressStudio() {
               ref={inputRef}
               type="file"
               className="hidden"
-              accept="image/*,video/*"
+              accept="image/*,video/*,audio/mpeg,.mp3"
               onChange={(event) =>
                 onFileChosen(event.target.files?.item(0) ?? null)
               }
@@ -339,6 +349,8 @@ export function CompressStudio() {
                 <div className="rounded-[1.7rem] border border-white/10 bg-white/6 p-4 text-cyan-200">
                   {kind === "video" ? (
                     <Video className="h-8 w-8" />
+                  ) : kind === "audio" ? (
+                    <Music className="h-8 w-8" />
                   ) : (
                     <ImageIcon className="h-8 w-8" />
                   )}
@@ -347,10 +359,10 @@ export function CompressStudio() {
                   <h3 className="text-xl font-semibold text-white">
                     {file
                       ? `Pret a compresser: ${file.name}`
-                      : "Glisse une image ou une video ici"}
+                      : "Glisse une image, une video ou un MP3 ici"}
                   </h3>
                   <p className="mx-auto max-w-xl text-sm leading-7 text-slate-300">
-                    Support natif des images classiques et des videos courantes.
+                    Support natif des images, videos et fichiers MP3.
                     Le traitement est pense pour un usage local sur ton poste.
                   </p>
                 </div>
@@ -470,6 +482,38 @@ export function CompressStudio() {
                 </div>
               ) : null}
 
+              {kind === "audio" ? (
+                <div className="grid gap-5 rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+                  <div className="flex items-center gap-3">
+                    <SlidersHorizontal className="h-4 w-4 text-cyan-200" />
+                    <p className="text-sm font-medium text-slate-100">
+                      Reglages MP3
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {audioProfiles.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        data-cursor={option.label}
+                        onClick={() => setAudioQuality(option.value)}
+                        className={`soft-hover rounded-[1.25rem] border px-4 py-4 text-left ${
+                          audioQuality === option.value
+                            ? "border-cyan-300/70 bg-cyan-300/15 text-white"
+                            : "border-white/10 bg-white/4 text-slate-300"
+                        }`}
+                      >
+                        <p className="font-medium">{option.label}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
+                          {option.note}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {errorMessage ? (
                 <p className="rounded-2xl border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
                   {errorMessage}
@@ -516,6 +560,10 @@ export function CompressStudio() {
                       className="aspect-video w-full rounded-[1.25rem] object-cover"
                       src={previewUrl}
                     />
+                  ) : kind === "audio" ? (
+                    <div className="flex min-h-[20rem] items-center justify-center rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4">
+                      <audio key={previewUrl} controls className="w-full" src={previewUrl} />
+                    </div>
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
